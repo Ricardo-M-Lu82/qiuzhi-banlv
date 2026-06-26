@@ -65,7 +65,7 @@ class CareerChat {
      * 调用讯飞星辰 API
      */
     async callAPI(messages) {
-        const url = `${this.config.baseURL}/chat/completions`;
+        const url = `${this.config.baseURL}/chat`;
 
         const body = {
             model: this.config.model,
@@ -77,8 +77,7 @@ class CareerChat {
         const response = await fetch(url, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.config.apiKey}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(body),
             signal: AbortSignal.timeout(this.config.timeout)
@@ -158,11 +157,10 @@ class CareerChat {
         };
 
         try {
-            const response = await fetch(`${this.config.baseURL}/chat/completions`, {
+            const response = await fetch(`${this.config.baseURL}/chat`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.config.apiKey}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     model: this.config.model,

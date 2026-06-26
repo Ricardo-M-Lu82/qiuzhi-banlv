@@ -135,11 +135,10 @@ JD关键词：${jdKeywords.join('、')}
 只返回JSON，不要其他内容。`;
 
         try {
-            const response = await fetch(`${this.config.baseURL}/chat/completions`, {
+            const response = await fetch(`${this.config.baseURL}/chat`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.config.apiKey}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     model: this.config.model,

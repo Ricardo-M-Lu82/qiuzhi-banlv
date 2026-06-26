@@ -4,9 +4,10 @@
 // ========================================
 
 const API_CONFIG = {
-    // 讯飞星辰 Coding Plan 端点
-    baseURL: 'https://maas-coding-api.cn-huabei-1.xf-yun.com/v2',
-    apiKey: 'da90bf4b058c26b45851e34786dff94e:ZDQzYzcwMzVjNDAwYjk0M2VjY2M0YmVm',
+    // 使用当前域名的 /api/chat 代理（Cloudflare Worker 会自动转发到讯飞）
+    // 讯飞星辰 Coding Plan
+    baseURL: '/api',  // 使用相对路径，由Worker代理转发
+    apiKey: '',       // Worker代理中已内置API Key，前端不需要传
     model: 'astron-code-latest',
 
     // 对话参数
