@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>岗位匹配 — 求职伴侣</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-match">
+    <!-- 顶部导航 -->
+    <nav class="nav-top">
+        <a href="index.html" class="nav-back">← 返回首页</a>
+        <a href="index.html" class="nav-logo">求职伴侣</a>
+    </nav>
+
+    <!-- 阶段1：对话界面 -->
+    <section id="chat-phase" class="chat-container">
+        <div id="chat-messages" class="chat-messages">
+            <!-- 对话消息动态插入 -->
+        </div>
+        <div id="mlu-note-chat" class="mlu-note" style="display:none;">
+            💡 <span>M Lu说：</span>我第一次被问到这个问题的时候，脑子里一片空白。后来才发现，不是我什么都没做——是我从来没觉得那些事"值得说"。其实你做过的事，比你想象的值钱。
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" placeholder="输入你的回答..." autocomplete="off">
+            <button id="chat-send">发送</button>
+        </div>
+    </section>
+
+    <!-- 阶段2：结构化确认 -->
+    <section id="form-phase" style="display:none;">
+        <div class="progress-bar" id="progress-bar">
+            <div class="progress-step done"></div>
+            <div class="progress-step done"></div>
+            <div class="progress-step active"></div>
+            <div class="progress-step"></div>
+        </div>
+
+        <div id="form-container">
+            <!-- 表单步骤动态插入 -->
+        </div>
+    </section>
+
+    <!-- 阶段3：匹配结果 -->
+    <section id="results-phase" style="display:none;">
+        <div class="results-header">
+            <h2>聊完之后，我觉得你可以试试这些方向——</h2>
+            <p>基于我们的聊天，为你推荐以下岗位方向</p>
+        </div>
+        <div id="results-container">
+            <!-- 结果卡片动态插入 -->
+        </div>
+        <div id="mlu-note-results" class="mlu-note" style="background:transparent; border:none; text-align:center; padding: var(--space-xl);">
+            💡 <span>M Lu说：</span>我当初只知道自己能做销售——因为那是唯一一个"不需要专业技能"的选项。后来才发现，不是我没有技能，是我不知道那些技能叫什么名字。比如"能跟陌生人聊起来"，在职场里叫"商务沟通能力"。换个名字，是不是值钱多了？
+        </div>
+        <div class="results-actions">
+            <button class="btn-primary" onclick="window.location.href='resume.html'">继续 → 简历优化</button>
+            <button class="btn-secondary" onclick="location.reload()">重新匹配</button>
+        </div>
+    </section>
+
+    <!-- 加载脚本 -->
+    <script src="js/config.js"></script>
+    <script src="js/chat.js"></script>
+    <script src="js/match-engine.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+    (function() {
+        // ========================================
+        // 页面状态管理
+        // ========================================
+        const chatPhase = document.getElementById('chat-phase');
+        const formPhase = document.getElementById('form-phase');
+        const resultsPhase = document.getElementById('results-phase');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const chatSend = document.getElementById('chat-send');
+        const mluNote = document.getElementById('mlu-note-chat');
+        const formContainer = document.getElementById('form-container');
+        const progressBar = document.getElementById('progress-bar');
+        const resultsContainer = document.getElementById('results-container');
+
+        let currentPhase = 'chat';
+        let chatProfile = {};  // 对话提取的用户画像
+        let formData = {};     // 结构化确认的数据
+        let formStep = 0;
+
+        // 初始化对话引擎
+        const chat = new CareerChat(API_CONFIG);
+        const matchEngine = new MatchEngine();
+
+        // ========================================
+        // 对话阶段
+        // ========================================
+
+        // 显示AI开场白
+        function showOpeningMessage() {
+            const openingMsg = '嗨，先随便聊聊。不用紧张，这不是考试，也没有标准答案。大学这几年，有没有一件事——不管大事小事——做完之后你心里想的是"这事儿我干得还不错"？想到了就说，想不出来也没关系，我们换个角度聊。';
+            addBubble('ai', openingMsg);
+        }
+
+        // 添加聊天气泡
+        function addBubble(type, text) {
+            const bubble = document.createElement('div');
+            bubble.className = `chat-bubble ${type}`;
+            bubble.textContent = text;
+            chatMessages.appendChild(bubble);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 显示加载中的气泡
+        function addLoadingBubble() {
+            const bubble = document.createElement('div');
+            bubble.className = 'chat-bubble ai';
+            bubble.id = 'loading-bubble';
+            bubble.innerHTML = `
+                <div class="loading-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            `;
+            chatMessages.appendChild(bubble);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 移除加载气泡
+        function removeLoadingBubble() {
+            const bubble = document.getElementById('loading-bubble');
+            if (bubble) bubble.remove();
+        }
+
+        // 发送消息
+        async function handleSend() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            // 禁用输入
+            chatInput.disabled = true;
+            chatSend.disabled = true;
+
+            // 显示用户消息
+            addBubble('user', text);
+            chatInput.value = '';
+
+            // 显示AI加载中
+            addLoadingBubble();
+
+            try {
+                const result = await chat.sendMessage(text);
+
+                // 移除加载气泡
+                removeLoadingBubble();
+
+                // 显示AI回复
+                addBubble('ai', result.reply);
+
+                // 第2轮后显示M Lu说
+                if (result.round >= 2) {
+                    mluNote.style.display = 'block';
+                }
+
+                // 对话完成 → 切换到结构化确认
+                if (result.isComplete) {
+                    chatProfile = chat.userProfile;
+                    setTimeout(() => switchToForm(), 1000);
+                }
+            } catch (error) {
+                removeLoadingBubble();
+                // 显示具体错误信息帮助调试
+                let errorMsg = '抱歉，我暂时无法回复。';
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorMsg = '网络连接失败。这可能是因为浏览器跨域限制(CORS)，讯飞API不允许从网页直接调用。需要换一种方式调用API。';
+                } else if (error.message.includes('timeout')) {
+                    errorMsg = '请求超时，请稍后重试。';
+                }
+                addBubble('ai', errorMsg);
+                console.error('对话错误详情:', error.message, error);
+            }
+
+            // 恢复输入
+            chatInput.disabled = false;
+            chatSend.disabled = false;
+            chatInput.focus();
+        }
+
+        // 发送按钮点击
+        chatSend.addEventListener('click', handleSend);
+
+        // 回车发送
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSend();
+        });
+
+        // ========================================
+        // 结构化确认阶段
+        // ========================================
+
+        // 表单步骤定义
+        const formSteps = [
+            {
+                title: '我大概了解你了。再帮我确认几件事——',
+                subtitle: '第1步：你的能力',
+                fields: [
+                    {
+                        type: 'multi-select',
+                        label: '你觉得下面哪些能力是你比较突出的？（多选）',
+                        id: 'strengths',
+                        options: [
+                            { value: '沟通表达', label: '沟通表达 — 能跟人聊起来，说清楚自己的想法' },
+                            { value: '逻辑分析', label: '逻辑分析 — 喜欢推理，能从复杂信息里找到规律' },
+                            { value: '执行力', label: '执行力 — 想到了就去做，不拖延' },
+                            { value: '共情能力', label: '共情能力 — 能理解别人的感受和需求' },
+                            { value: '创意', label: '创意 — 喜欢想新点子，不满足于照搬' },
+                            { value: '细致', label: '细致 — 做事认真，注意细节' },
+                            { value: '抗压能力', label: '抗压能力 — 压力大的时候也能保持状态' },
+                            { value: '学习能力', label: '学习能力 — 新东西学得快，愿意自己钻研' }
+                        ]
+                    }
+                ]
+            },
+            {
+                title: '再确认一下你的偏好——',
+                subtitle: '第2步：工作偏好',
+                fields: [
+                    {
+                        type: 'single-select',
+                        label: '下面哪种状态让你更舒服？',
+                        id: 'workStyle',
+                        options: [
+                            { value: '跟人打交道', label: '跟人聊天、说服别人、帮别人解决问题' },
+                            { value: '跟数据打交道', label: '自己研究数据、整理信息、找规律' },
+                            { value: '跟事物打交道', label: '动手做东西、操作工具、看到实际成果' },
+                            { value: '综合', label: '以上都可以，不挑' }
+                        ]
+                    },
+                    {
+                        type: 'single-select',
+                        label: '你对工作节奏的偏好？',
+                        id: 'preference',
+                        options: [
+                            { value: '挑战型', label: '不介意今天不知道明天要处理什么，觉得变化有意思' },
+                            { value: '稳定型', label: '每天大概知道今天要干什么，不喜欢突然的变化' }
+                        ]
+                    }
+                ]
+            },
+            {
+                title: '最后，几个现实问题——',
+                subtitle: '第3步：硬性约束',
+                fields: [
+                    {
+                        type: 'text',
+                        label: '你想在哪个城市工作？（可以写多个）',
+                        id: 'cities',
+                        placeholder: '比如：无锡、南京、上海...'
+                    },
+                    {
+                        type: 'text',
+                        label: '薪资底线是多少？（月薪，税前）',
+                        id: 'salary',
+                        placeholder: '比如：6000'
+                    }
+                ]
+            }
+        ];
+
+        function switchToForm() {
+            currentPhase = 'form';
+            chatPhase.style.display = 'none';
+            formPhase.style.display = 'block';
+            resultsPhase.style.display = 'none';
+            formStep = 0;
+            renderFormStep();
+        }
+
+        function renderFormStep() {
+            const step = formSteps[formStep];
+
+            // 更新进度条
+            const steps = progressBar.querySelectorAll('.progress-step');
+            steps.forEach((s, i) => {
+                s.className = 'progress-step';
+                if (i < formStep + 2) s.classList.add('done');
+                if (i === formStep + 2) s.classList.add('active');
+            });
+
+            // 渲染表单
+            let html = `
+                <div class="form-section">
+                    <h2>${step.title}</h2>
+                    <p style="color: var(--text-muted); margin-bottom: var(--space-lg);">${step.subtitle}</p>
+            `;
+
+            step.fields.forEach(field => {
+                html += `<div class="form-group">`;
+                html += `<label>${field.label}</label>`;
+
+                if (field.type === 'multi-select' || field.type === 'single-select') {
+                    html += `<div class="option-list">`;
+                    field.options.forEach(opt => {
+                        const inputType = field.type === 'multi-select' ? 'checkbox' : 'radio';
+                        html += `
+                            <label class="option-item" data-field="${field.id}" data-value="${opt.value}">
+                                <span class="radio-dot"></span>
+                                ${opt.label}
+                                <input type="${inputType}" name="${field.id}" value="${opt.value}" style="display:none;">
+                            </label>
+                        `;
+                    });
+                    html += `</div>`;
+                } else if (field.type === 'text') {
+                    html += `<input type="text" id="${field.id}" placeholder="${field.placeholder}" style="width:100%; padding:12px 16px; border:1px solid var(--border-warm); border-radius:var(--radius-btn); font-size:var(--font-body); font-family:inherit; outline:none;">`;
+                }
+
+                html += `</div>`;
+            });
+
+            html += `
+                <div class="form-actions">
+                    ${formStep > 0 ? '<button class="btn-secondary" id="btn-prev">← 上一步</button>' : '<div></div>'}
+                    <button class="btn-primary" id="btn-next">
+                        ${formStep < formSteps.length - 1 ? '下一步 →' : '看看我适合什么 →'}
+                    </button>
+                </div>
+            `;
+
+            html += `</div>`;
+            formContainer.innerHTML = html;
+
+            // 绑定选项点击
+            formContainer.querySelectorAll('.option-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const fieldId = this.dataset.field;
+                    const isMulti = formSteps[formStep].fields.find(f => f.id === fieldId)?.type === 'multi-select';
+
+                    if (isMulti) {
+                        this.classList.toggle('selected');
+                    } else {
+                        // 单选：取消同组其他选项
+                        formContainer.querySelectorAll(`.option-item[data-field="${fieldId}"]`).forEach(el => {
+                            el.classList.remove('selected');
+                        });
+                        this.classList.add('selected');
+                    }
+                });
+            });
+
+            // 绑定按钮
+            const btnNext = document.getElementById('btn-next');
+            const btnPrev = document.getElementById('btn-prev');
+
+            if (btnNext) {
+                btnNext.addEventListener('click', () => {
+                    // 收集当前步骤的数据
+                    collectFormData();
+
+                    if (formStep < formSteps.length - 1) {
+                        formStep++;
+                        renderFormStep();
+                    } else {
+                        // 最后一步 → 显示结果
+                        showResults();
+                    }
+                });
+            }
+
+            if (btnPrev) {
+                btnPrev.addEventListener('click', () => {
+                    collectFormData();
+                    formStep--;
+                    renderFormStep();
+                });
+            }
+        }
+
+        function collectFormData() {
+            const step = formSteps[formStep];
+            step.fields.forEach(field => {
+                if (field.type === 'multi-select') {
+                    const selected = formContainer.querySelectorAll(`.option-item[data-field="${field.id}"].selected`);
+                    formData[field.id] = Array.from(selected).map(el => el.dataset.value);
+                } else if (field.type === 'single-select') {
+                    const selected = formContainer.querySelector(`.option-item[data-field="${field.id}"].selected`);
+                    formData[field.id] = selected ? selected.dataset.value : null;
+                } else if (field.type === 'text') {
+                    const input = document.getElementById(field.id);
+                    formData[field.id] = input ? input.value : '';
+                }
+            });
+        }
+
+        // ========================================
+        // 匹配结果阶段
+        // ========================================
+
+        function showResults() {
+            currentPhase = 'results';
+            chatPhase.style.display = 'none';
+            formPhase.style.display = 'none';
+            resultsPhase.style.display = 'block';
+
+            // 执行匹配
+            const results = matchEngine.match(chatProfile, formData);
+
+            // 渲染结果
+            let html = '';
+            results.forEach((job, index) => {
+                const level = matchEngine.getMatchLevel(job.matchScore);
+                html += `
+                    <div class="result-card">
+                        <span class="match-badge ${level}">匹配度 ${job.matchScore}%</span>
+                        <h3>📌 ${job.name}</h3>
+
+                        <div class="result-section">
+                            <h4>为什么适合你</h4>
+                            <p>${job.suitableFor}</p>
+                        </div>
+
+                        <div class="result-section">
+                            <h4>工作内容</h4>
+                            <p>${job.description}</p>
+                        </div>
+
+                        <div class="result-section">
+                            <h4>发展路径</h4>
+                            <ul>
+                                ${job.careerPath.map(p => `<li>${p}</li>`).join('')}
+                            </ul>
+                        </div>
+
+                        <div class="result-section">
+                            <h4>薪资参考</h4>
+                            <p>${job.salaryRange}</p>
+                        </div>
+
+                        <div class="result-section">
+                            <h4>🔍 去BOSS直聘搜这些关键词</h4>
+                            <div class="search-tags">
+                                ${job.searchKeywords.map(kw => `<span class="search-tag">${kw}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            resultsContainer.innerHTML = html;
+            scrollToBottom();
+        }
+
+        // ========================================
+        // 启动
+        // ========================================
+        showOpeningMessage();
+    })();
+    </script>
+</body>
+</html>

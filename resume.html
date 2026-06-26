@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简历优化 — 求职伴侣</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-resume">
+    <!-- 顶部导航 -->
+    <nav class="nav-top">
+        <a href="match.html" class="nav-back">← 返回岗位匹配</a>
+        <a href="index.html" class="nav-logo">求职伴侣</a>
+    </nav>
+
+    <!-- 输入区 -->
+    <section id="input-phase">
+        <h1 style="text-align:center; margin-bottom: var(--space-sm);">让简历更对JD的胃口</h1>
+        <p style="text-align:center; color: var(--text-muted); margin-bottom: var(--space-xl);">
+            把你想投的岗位JD和你的简历贴进来，帮你看看差在哪、怎么改
+        </p>
+
+        <div class="resume-form">
+            <label>第1步：粘贴目标岗位的JD</label>
+            <p class="hint">从BOSS直聘、猎聘上直接复制就行</p>
+            <textarea id="jd-input" placeholder="把JD全文粘贴到这里..."></textarea>
+        </div>
+
+        <div class="resume-form">
+            <label>第2步：粘贴你的简历</label>
+            <p class="hint">别担心写得不好，我们就是来帮你改的</p>
+            <textarea id="resume-input" placeholder="把你的简历全文粘贴到这里..."></textarea>
+        </div>
+
+        <div style="text-align:center; margin-top: var(--space-lg);">
+            <button class="btn-primary" id="btn-analyze">帮我看看到底差在哪</button>
+        </div>
+
+        <div style="text-align:center; margin-top: var(--space-lg);">
+            <p class="mlu-note" style="background:transparent; border:none; display:inline-block;">
+                💡 <span>M Lu说：</span>简历不是写"你做过什么"，而是写"你做成了什么"。比如不是"负责社团外联"，而是"独立拉到3家赞助，总计5000元"。数字比形容词有说服力。
+            </p>
+        </div>
+    </section>
+
+    <!-- 分析结果区 -->
+    <section id="result-phase" style="display:none;">
+        <div id="analysis-container">
+            <!-- 分析结果动态插入 -->
+        </div>
+
+        <div class="results-actions">
+            <button class="btn-primary" id="btn-reanalyze">换一个JD重新优化</button>
+            <button class="btn-secondary" onclick="window.location.href='match.html'">← 回到岗位匹配</button>
+        </div>
+    </section>
+
+    <!-- 加载脚本 -->
+    <script src="js/config.js"></script>
+    <script src="js/resume-analyzer.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+    (function() {
+        const inputPhase = document.getElementById('input-phase');
+        const resultPhase = document.getElementById('result-phase');
+        const analysisContainer = document.getElementById('analysis-container');
+        const btnAnalyze = document.getElementById('btn-analyze');
+        const btnReanalyze = document.getElementById('btn-reanalyze');
+        const jdInput = document.getElementById('jd-input');
+        const resumeInput = document.getElementById('resume-input');
+
+        const analyzer = new ResumeAnalyzer(API_CONFIG);
+
+        // 分析按钮
+        btnAnalyze.addEventListener('click', async () => {
+            const jdText = jdInput.value.trim();
+            const resumeText = resumeInput.value.trim();
+
+            if (!jdText || !resumeText) {
+                alert('请把JD和简历都粘贴进来再分析哦');
+                return;
+            }
+
+            // 显示加载状态
+            btnAnalyze.disabled = true;
+            btnAnalyze.textContent = '正在分析中...';
+            analysisContainer.innerHTML = `
+                <div class="loading">
+                    <div class="loading-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <p>正在分析你的简历...</p>
+                </div>
+            `;
+            inputPhase.style.display = 'none';
+            resultPhase.style.display = 'block';
+
+            try {
+                const result = await analyzer.analyze(jdText, resumeText);
+                renderAnalysis(result);
+            } catch (error) {
+                console.error('分析错误:', error);
+                analysisContainer.innerHTML = `
+                    <div style="color: #D4694A; padding: 32px; text-align: center;">
+                        ⚠️ 分析过程出了点问题，请稍后重试
+                    </div>
+                `;
+            }
+
+            btnAnalyze.disabled = false;
+            btnAnalyze.textContent = '帮我看看到底差在哪';
+        });
+
+        // 重新分析按钮
+        btnReanalyze.addEventListener('click', () => {
+            inputPhase.style.display = 'block';
+            resultPhase.style.display = 'none';
+            jdInput.value = '';
+            resumeInput.value = '';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        // 渲染分析结果
+        function renderAnalysis(result) {
+            let html = '';
+
+            // JD拆解
+            html += `
+                <div class="analysis-result">
+                    <div class="analysis-section">
+                        <h3>📋 这个JD到底在说什么——</h3>
+                        <p>${result.jdSummary || '分析中...'}</p>
+                    </div>
+
+                    <div class="analysis-section">
+                        <h3>🎯 JD核心要求</h3>
+                        <div class="jd-keywords">
+                            ${(result.coreRequirements || result.jdKeywords || []).map(kw =>
+                                `<span class="jd-keyword">${kw}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+            `;
+
+            // 差距分析
+            if (result.gaps && result.gaps.length > 0) {
+                html += `
+                    <div class="analysis-section">
+                        <h3>⚠️ 你的简历跟这个JD之间，差了什么</h3>
+                        ${result.gaps.map(gap => `
+                            <div class="gap-item">
+                                <p><span class="missing">缺少"${gap.keyword}"的体现</span></p>
+                                <p style="font-size: var(--font-small); color: var(--text-muted);">${gap.suggestion}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            // 具体建议
+            if (result.specificAdvice && result.specificAdvice.length > 0) {
+                html += `
+                    <div class="analysis-section">
+                        <h3>💡 具体怎么改</h3>
+                        <ul>
+                            ${result.specificAdvice.map(advice => `<li>${advice}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            // 优化版简历
+            if (result.optimizedVersion) {
+                html += `
+                    <div class="analysis-section">
+                        <h3>✅ 优化版简历</h3>
+                        <div class="optimized-resume">${result.optimizedVersion}</div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            analysisContainer.innerHTML = html;
+            scrollToBottom();
+        }
+    })();
+    </script>
+</body>
+</html>
